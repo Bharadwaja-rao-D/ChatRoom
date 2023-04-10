@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+pub mod room;
 
 #[derive(Debug)]
 pub struct Room {
