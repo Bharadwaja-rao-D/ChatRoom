@@ -1,7 +1,8 @@
 use std::{env, io::Error};
 
+use chat_room::room::{Guest, Room};
 use futures_util::{future, StreamExt, TryStreamExt};
-use log::info;
+use log::{info, debug};
 use tokio::net::{TcpListener, TcpStream};
 
 #[tokio::main]
@@ -14,15 +15,25 @@ async fn main() -> Result<(), Error> {
     let listener = try_socket.expect("Failed to bind");
     info!("Listening on: {}", addr);
 
+    let r1 = Room::new();
+    let c1 =r1.control.start();
+    let c1 = c1.await;
+
+
 
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream));
+        debug!("Accepting stream");
+        tokio::spawn(accept_connection(stream, &r1));
     }
 
+    c1.await.unwrap();
+
+
     Ok(())
+
 }
 
-async fn accept_connection(stream: TcpStream) {
+async fn accept_connection(stream: TcpStream, r: &Room) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     info!("Peer address: {}", addr);
 
@@ -33,11 +44,11 @@ async fn accept_connection(stream: TcpStream) {
     info!("New WebSocket connection: {}", addr);
 
     let (write, read) = ws_stream.split();
-    // We should not forward messages other than text or binary.
-    read.try_filter(|msg| future::ready(msg.is_text() || msg.is_binary()))
-        .forward(write)
-        .await
-        .expect("Failed to forward messages");
+
+    let mut g1 = Guest::new(read, write);
+    r.join(&mut g1);
+    g1.start().await;
+
 
 
 }
