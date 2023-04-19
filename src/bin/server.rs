@@ -1,7 +1,7 @@
 use std::{env, io::Error};
 
 use chat_room::room::{Guest, Room};
-use futures_util::{future, StreamExt, TryStreamExt};
+use futures_util::StreamExt;
 use log::{info, debug};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -23,7 +23,7 @@ async fn main() -> Result<(), Error> {
 
     while let Ok((stream, _)) = listener.accept().await {
         debug!("Accepting stream");
-        tokio::spawn(accept_connection(stream, &r1));
+        tokio::spawn(accept_connection(stream));
     }
 
     c1.await.unwrap();
@@ -33,7 +33,7 @@ async fn main() -> Result<(), Error> {
 
 }
 
-async fn accept_connection(stream: TcpStream, r: &Room) {
+async fn accept_connection(stream: TcpStream) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     info!("Peer address: {}", addr);
 
@@ -46,9 +46,6 @@ async fn accept_connection(stream: TcpStream, r: &Room) {
     let (write, read) = ws_stream.split();
 
     let mut g1 = Guest::new(read, write);
-    r.join(&mut g1);
     g1.start().await;
-
-
 
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures::{TryStreamExt, SinkExt};
@@ -87,6 +88,7 @@ impl Guest{
 
 
 
+#[derive(Debug)]
 pub struct Control{
     sender: broadcast::Sender<String>,
     receiver: Receiver,
@@ -101,6 +103,7 @@ impl Control {
     }
 
     ///A task that runs the controller
+    //takes the ownership of Room
     pub async fn start(mut self) -> JoinHandle<()> {
         debug!("Starting controller for the room");
         return tokio::spawn(async move{
@@ -114,6 +117,7 @@ impl Control {
     }
 }
 
+#[derive(Debug)]
 pub struct Room{
     pub control: Control,
     room_id: u32,
@@ -125,9 +129,14 @@ impl Room {
         info!("Created room {}", room_id);
         return Room { control: Control::new(), room_id }
     }
+
+    pub fn start(self){
+        self.control.start();
+    }
+
     ///Whenever a guest joins a room tx end of mpsc channel and rx end of a broadcast channel will be
     ///given to him
-    pub fn join(&self, guest: &mut Guest) {
+    pub fn add_guest(&self, guest: &mut Guest) {
         let room_id = self.room_id;
         guest.tocontrol.senders.insert(room_id, self.control.t_sender.clone());
         guest.fromcontrol.receivers.insert(room_id, self.control.sender.subscribe());
@@ -135,3 +144,24 @@ impl Room {
 
 }
 
+#[derive(Debug)]
+pub struct RoomManager{
+    pub rooms: HashMap<u32,Arc<Mutex<Room>>>
+}
+
+impl RoomManager{
+    pub fn join_room(&self, room_id: RoomId, guest: &mut Guest){
+        let rooms = self.rooms;
+        let room = rooms.get(&room_id).unwrap();
+        let room = room.lock().unwrap();
+        room.add_guest(guest);
+    }
+
+    pub async fn start_room(&self, room_id: RoomId){
+        // Now we have ownership of the room. We can call start on it.
+         if let Some(room) = self.rooms.get(&room_id) {
+            let cloned_room = Arc::clone(room);
+            cloned_room.lock().unwrap().start();
+        }
+    }
+}
