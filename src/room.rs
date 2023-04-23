@@ -23,18 +23,18 @@ pub struct ToControl{
 }
 
 impl ToControl{
-    pub async fn start(mut self) -> JoinHandle<()>{
+    async fn start(&mut self) -> () {
         debug!("Starting tocontrol");
-        return tokio::spawn(async move{
-            //Read a Message from stream which contains to which group the msg should be sent and
-            //then send the message to the respective sender
+        //Read a Message from stream which contains to which group the msg should be sent and
+        //then send the message to the respective sender
 
-            // For now only one room is present
+        // For now only one room is present
 
-            while let Ok(Some(Message::Text(msg))) = self.read.try_next().await{
-                self.senders.get_mut(&1).unwrap().send(msg).await.unwrap();
-            }
-        });
+        while let Ok(Some(Message::Text(msg))) = self.read.try_next().await{
+            self.senders.get_mut(&1).unwrap().send(msg).await.unwrap();
+        }
+
+        return ();
     }
 }
 
@@ -44,11 +44,8 @@ pub struct FromControl{
 }
 
 impl FromControl{
-    pub async fn start(mut self) -> JoinHandle<()>{
+     async fn start(&mut self) -> (){
         debug!("Starting fromControl");
-        return tokio::spawn(async move{
-            //Read a Message from stream which contains to which group the msg should be sent and
-            //then send the message to the respective sender
 
             // For now only one room is present
 
@@ -56,7 +53,8 @@ impl FromControl{
             while let Ok(msg) = receiver.recv().await {
                 self.write.send(Message::Text(msg)).await.unwrap();
             }
-        });
+
+            return ();
     }
 }
 
@@ -77,7 +75,9 @@ impl Guest{
         return Self { tocontrol, fromcontrol };
 
     }
-    pub async fn start(self) {
+
+    ///Starts the fromControl and toControl
+    pub async fn start(&mut self) {
 
         futures::join! {
             self.tocontrol.start(),
@@ -103,17 +103,16 @@ impl Control {
     }
 
     ///A task that runs the controller
-    //takes the ownership of Room
-    pub async fn start(mut self) -> JoinHandle<()> {
+    //takes the ownership of Control
+    pub async fn start(&mut self) -> (){
         debug!("Starting controller for the room");
-        return tokio::spawn(async move{
-            tokio::time::sleep(Duration::from_secs(30)).await;
-            while let Some(msg) = self.receiver.recv().await {
-                debug!("Recieved: {}", msg);
-                self.sender.send(msg).unwrap();
-            }
-            debug!("Ending controller for the room");
-        });
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        while let Some(msg) = self.receiver.recv().await {
+            debug!("Recieved: {}", msg);
+            self.sender.send(msg).unwrap();
+        }
+        debug!("Ending controller for the room");
+        return ();
     }
 }
 
@@ -130,10 +129,6 @@ impl Room {
         return Room { control: Control::new(), room_id }
     }
 
-    pub fn start(self){
-        self.control.start();
-    }
-
     ///Whenever a guest joins a room tx end of mpsc channel and rx end of a broadcast channel will be
     ///given to him
     pub fn add_guest(&self, guest: &mut Guest) {
@@ -141,7 +136,6 @@ impl Room {
         guest.tocontrol.senders.insert(room_id, self.control.t_sender.clone());
         guest.fromcontrol.receivers.insert(room_id, self.control.sender.subscribe());
     }
-
 }
 
 #[derive(Debug)]
@@ -150,18 +144,15 @@ pub struct RoomManager{
 }
 
 impl RoomManager{
+    pub fn new() -> Self {
+        return RoomManager { rooms: HashMap::new() };
+    }
     pub fn join_room(&self, room_id: RoomId, guest: &mut Guest){
-        let rooms = self.rooms;
+        let rooms = &self.rooms;
         let room = rooms.get(&room_id).unwrap();
         let room = room.lock().unwrap();
         room.add_guest(guest);
     }
 
-    pub async fn start_room(&self, room_id: RoomId){
-        // Now we have ownership of the room. We can call start on it.
-         if let Some(room) = self.rooms.get(&room_id) {
-            let cloned_room = Arc::clone(room);
-            cloned_room.lock().unwrap().start();
-        }
-    }
 }
+

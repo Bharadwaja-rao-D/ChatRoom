@@ -1,6 +1,6 @@
 use std::{env, io::Error};
 
-use chat_room::room::{Guest, Room};
+use chat_room::room::{Guest, Room, RoomManager};
 use futures_util::StreamExt;
 use log::{info, debug};
 use tokio::net::{TcpListener, TcpStream};
@@ -15,9 +15,9 @@ async fn main() -> Result<(), Error> {
     let listener = try_socket.expect("Failed to bind");
     info!("Listening on: {}", addr);
 
-    let r1 = Room::new();
+
+    let mut r1 = Room::new();
     let c1 =r1.control.start();
-    let c1 = c1.await;
 
 
 
@@ -26,10 +26,11 @@ async fn main() -> Result<(), Error> {
         tokio::spawn(accept_connection(stream));
     }
 
-    c1.await.unwrap();
 
 
-    Ok(())
+    futures::join!( c1 );
+
+        Ok(())
 
 }
 
