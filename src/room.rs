@@ -135,6 +135,8 @@ impl Room {
         let room_id = self.room_id;
         guest.tocontrol.senders.insert(room_id, self.control.t_sender.clone());
         guest.fromcontrol.receivers.insert(room_id, self.control.sender.subscribe());
+
+        debug!("Added new guest into room: {}", room_id);
     }
 }
 
